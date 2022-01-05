@@ -17,14 +17,20 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 
+/**
+ * impl note: stopping procedure
+ * - when stop() is called (after both end of the connection are disconnected), the LogBuffer is then closed
+ * - stopping the periodic flush task is then left to the task itself,
+ * - it should cancel itself after knowing the buffer is closed
+ */
 @Log4j2
 public class SessionLogger {
 
@@ -36,7 +42,9 @@ public class SessionLogger {
 
     private final Path logPath;
 
-    private final Deque<String> logBuffer = new ArrayDeque<>();
+    private final LogBuffer buffer = new LogBuffer();
+
+    private ScheduledFuture<?> flushFuture;
 
     public SessionLogger(ProxyPass proxy, Path sessionsDir, String displayName, long timestamp) {
         this.proxy = proxy;
@@ -54,12 +62,12 @@ public class SessionLogger {
                     throw new RuntimeException(e);
                 }
             }
-            executor.scheduleAtFixedRate(this::flushLogBuffer, 5, 5, TimeUnit.SECONDS);
+            flushFuture = executor.scheduleAtFixedRate(this::flushLogBuffer, 5, 5, TimeUnit.SECONDS);
         }
     }
 
     public void stop() {
-        // TODO: figure out a way to stop elegantly, without losing packets
+        buffer.close();
     }
 
     public void saveImage(String name, BufferedImage image) {
@@ -112,21 +120,21 @@ public class SessionLogger {
     }
 
     private void logToBuffer(Supplier<String> supplier) {
-        synchronized (logBuffer) {
-            logBuffer.addLast(supplier.get());
-        }
+        buffer.offer(supplier.get());
     }
 
     private void flushLogBuffer() {
-        synchronized (logBuffer) {
-            try {
-                if (proxy.getConfiguration().getLogTo().logToFile) {
-                    Files.write(logPath, logBuffer, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-                }
-                logBuffer.clear();
-            } catch (IOException e) {
-                log.error("Unable to flush packet log", e);
+        try {
+            Deque<String> contents = buffer.drain();
+            if (proxy.getConfiguration().getLogTo().logToFile) {
+                Files.write(logPath, contents, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
             }
+        } catch (LogBufferClosedException e) {
+            // stop if we drained everything
+            flushFuture.cancel(false);
+            flushFuture = null;
+        } catch (IOException e) {
+            log.error("Unable to flush packet log", e);
         }
     }
 

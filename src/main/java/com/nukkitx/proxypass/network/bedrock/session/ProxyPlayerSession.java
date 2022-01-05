@@ -11,15 +11,19 @@ import com.nukkitx.protocol.bedrock.handler.BedrockPacketHandler;
 import com.nukkitx.protocol.bedrock.packet.UnknownPacket;
 import com.nukkitx.protocol.bedrock.util.EncryptionUtils;
 import com.nukkitx.proxypass.ProxyPass;
+import com.nukkitx.proxypass.network.bedrock.logging.LogBuffer;
 import com.nukkitx.proxypass.network.bedrock.logging.SessionLogger;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.checkerframework.checker.units.qual.A;
 
 import java.security.KeyPair;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Log4j2
 @Getter
@@ -52,8 +56,17 @@ public class ProxyPlayerSession {
                 timestamp
         );
         logger.start();
+        // only stop when both streams are disconnected
+        AtomicInteger stopCounter = new AtomicInteger(2);
         this.upstream.addDisconnectHandler(reason->{
-            logger.stop();
+            if(stopCounter.decrementAndGet() == 0) {
+                logger.stop();
+            }
+        });
+        this.downstream.addDisconnectHandler(reason->{
+            if(stopCounter.decrementAndGet() == 0) {
+                logger.stop();
+            }
         });
     }
 
