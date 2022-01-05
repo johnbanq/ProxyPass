@@ -98,11 +98,11 @@ public class SessionLogger {
             }
 
             if (proxy.getConfiguration().isLoggingPackets()) {
-                logToBuffer(() -> logPrefix + packet.toString());
+                logToBuffer(() -> logPrefix + packet);
             }
 
             if (proxy.getConfiguration().isLoggingPackets() && proxy.getConfiguration().getLogTo().logToConsole) {
-                System.out.println(logPrefix + packet.toString());
+                System.out.println(logPrefix + packet);
             }
         }
     }
