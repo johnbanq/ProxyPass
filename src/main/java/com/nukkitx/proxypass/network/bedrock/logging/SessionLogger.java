@@ -21,6 +21,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -38,6 +39,8 @@ public class SessionLogger {
 
     private final Deque<String> logBuffer = new ArrayDeque<>();
 
+    private ScheduledFuture<?> flushFuture;
+
     public SessionLogger(ProxyPass proxy, Path sessionsDir, String displayName, long timestamp) {
         this.proxy = proxy;
         this.dataPath = sessionsDir.resolve(displayName + '-' + timestamp);
@@ -54,8 +57,13 @@ public class SessionLogger {
                     throw new RuntimeException(e);
                 }
             }
-            executor.scheduleAtFixedRate(this::flushLogBuffer, 5, 5, TimeUnit.SECONDS);
+            flushFuture = executor.scheduleAtFixedRate(this::flushLogBuffer, 5, 5, TimeUnit.SECONDS);
         }
+    }
+
+    public void stop() {
+        flushFuture.cancel(false);
+        flushFuture = null;
     }
 
     public void saveImage(String name, BufferedImage image) {

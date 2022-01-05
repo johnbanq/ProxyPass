@@ -52,6 +52,9 @@ public class ProxyPlayerSession {
                 timestamp
         );
         logger.start(proxy);
+        this.upstream.addDisconnectHandler(reason->{
+            logger.stop();
+        });
     }
 
     public BatchHandler getUpstreamBatchHandler() {
