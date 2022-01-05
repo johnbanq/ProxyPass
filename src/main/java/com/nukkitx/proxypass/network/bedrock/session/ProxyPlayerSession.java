@@ -51,7 +51,7 @@ public class ProxyPlayerSession {
                 this.authData.getDisplayName(),
                 timestamp
         );
-        logger.start(proxy);
+        logger.start();
         this.upstream.addDisconnectHandler(reason->{
             logger.stop();
         });
